@@ -1,0 +1,374 @@
+<html><head><base href="https://example.com/">
+  <meta charset="UTF-8">
+  <title>Interactive Art Gallery</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      background: #fff5f7;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .gallery {
+      background: white;
+      padding: 20px;
+      border-radius: 20px;
+      box-shadow: 0 4px 15px rgba(255,182,193,0.3);
+      max-width: 800px;
+      width: 100%;
+      border: 3px solid #ffb6c1;
+    }
+    .art-display {
+      position: relative;
+      min-height: 400px;
+      border: 2px dashed #ffb6c1;
+      border-radius: 15px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #fff;
+    }
+    .chat-area {
+      height: 200px;
+      border: 2px solid #ffb6c1;
+      border-radius: 15px;
+      padding: 15px;
+      overflow-y: auto;
+      margin-bottom: 15px;
+      background: #fff;
+    }
+    .controls {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 10px 20px;
+      background: #ff9ac1;
+      color: white;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 5px rgba(255,154,193,0.3);
+    }
+    button:hover {
+      background: #ff80ab;
+      transform: translateY(-2px);
+    }
+    .message {
+      margin: 8px 0;
+      padding: 10px;
+      border-radius: 15px;
+      font-size: 14px;
+    }
+    .user-message {
+      background: #ffe6eb;
+      text-align: right;
+      margin-left: 20%;
+    }
+    .art-message {
+      background: #f8f8f8;
+      margin-right: 20%;
+    }
+    #fileInput {
+      display: none;
+    }
+    .participants {
+      margin-bottom: 15px;
+      padding: 12px;
+      background: #ffe6eb;
+      border-radius: 15px;
+      font-size: 15px;
+      color: #ff6b9c;
+    }
+    rt {
+      font-size: 0.8em;
+      color: #000;
+    }
+    .message-input {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    #messageText {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #ffb6c1;
+      border-radius: 25px;
+      font-size: 14px;
+      outline: none;
+    }
+    #messageText:focus {
+      border-color: #ff80ab;
+    }
+    .send-button {
+      padding: 10px 25px;
+    }
+  </style>
+</head>
+<body>
+  <div class="gallery">
+    <div class="participants">
+      <ruby>参加者<rt>さんかしゃ</rt></ruby>: <span id="participantCount">1</span><ruby>人<rt>にん</rt></ruby>
+    </div>
+    <div class="art-display" id="artDisplay">
+      <svg width="400" height="300" viewBox="0 0 400 300">
+        <rect width="100%" height="100%" fill="#fff5f7"/>
+        <circle cx="200" cy="150" r="80" fill="#ff9ac1" opacity="0.8">
+          <animate attributeName="r" values="80;85;80" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        <path d="M180,130 Q200,110 220,130 Q200,150 180,130" fill="#ff6b9c"/>
+        <circle cx="185" cy="120" r="5" fill="#fff"/>
+        <circle cx="215" cy="120" r="5" fill="#fff"/>
+        <text x="200" y="155" text-anchor="middle" fill="#fff" font-size="14">
+          アートをクリックして<ruby>会話<rt>かいわ</rt></ruby>を<ruby>開始<rt>かいし</rt></ruby>
+        </text>
+      </svg>
+    </div>
+    <div class="chat-area" id="chatArea"></div>
+    <div class="message-input">
+      <input type="text" id="messageText" placeholder="メッセージを入力してください">
+      <button class="send-button" onclick="sendMessage()">💬 送信</button>
+    </div>
+    <div class="controls">
+      <button onclick="document.getElementById('fileInput').click()">🖼️ <ruby>画像<rt>がぞう</rt></ruby>をアップロード</button>
+      <button onclick="generateNewArt()">✨ <ruby>新<rt>あたら</rt></ruby>しいアートを<ruby>生成<rt>せいせい</rt></ruby></button>
+      <button onclick="toggleSpeech()">🎤 <ruby>音声<rt>おんせい</rt></ruby>チャット</button>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" onchange="handleFileUpload(event)">
+  </div>
+
+  <script>
+    let isListening = false;
+    let recognition = null;
+    let synthesis = window.speechSynthesis;
+    let currentQuestionIndex = 0;
+    let lastResponse = '';
+    let askedQuestions = new Set();
+
+    const initialQuestions = [
+      "この作品の中で、一番印象に残る部分はどこですか？",
+      "この作品を見て、どんな季節を感じますか？",
+      "この作品から、どんな音が聞こえてきそうですか？",
+      "もしこの作品に題名をつけるとしたら、何にしますか？",
+      "この作品の中に、あなたの好きな色は含まれていますか？",
+      "この作品から、どんな匂いを感じますか？",
+      "この作品の中で、動きを感じる部分はありますか？",
+      "この作品を誰かにプレゼントするとしたら、誰にあげたいですか？",
+      "この作品は、どんな場所に飾るのが適していると思いますか？",
+      "この作品を見ていると、どんな思い出が浮かびますか？"
+    ];
+
+    const followUpQuestions = {
+      0: [
+        "その部分が印象的な理由を教えていただけますか？",
+        "他の部分と比べて、どのような違いがありますか？",
+        "その部分を見ていると、どんな気持ちになりますか？"
+      ],
+      1: [
+        "その季節を感じる理由は何ですか？",
+        "その季節の思い出と重なる部分はありますか？",
+        "別の季節だとしたら、どんな季節が考えられますか？"
+      ],
+      2: [
+        "その音は、どんな感情を呼び起こしますか？",
+        "その音が聞こえてくる理由は何だと思いますか？",
+        "他にどんな音が重なりそうですか？"
+      ],
+      3: [
+        "その題名をつけた理由を教えていただけますか？",
+        "その題名から連想される物語はありますか？",
+        "別の視点で見たら、どんな題名が考えられますか？"
+      ],
+      4: [
+        "その色が好きな理由は何ですか？",
+        "その色は、どんな思い出と結びついていますか？",
+        "もし色を変えるとしたら、どんな色を選びますか？"
+      ],
+      5: [
+        "その匂いは、どんな感情を呼び起こしますか？",
+        "その匂いが感じられる理由は何だと思いますか？",
+        "他にどんな匂いが想像されますか？"
+      ],
+      6: [
+        "その動きは、どんな感情を呼び起こしますか？",
+        "その動きが感じられる理由は何だと思いますか？",
+        "他にどんな動きが想像されますか？"
+      ],
+      7: [
+        "その人にあげたい理由は何ですか？",
+        "その人にとってどんな意味があると思いますか？",
+        "他に誰にあげたいですか？"
+      ],
+      8: [
+        "その場所に飾る理由は何ですか？",
+        "その場所が適している理由は何だと思いますか？",
+        "他にどんな場所が考えられますか？"
+      ],
+      9: [
+        "その思い出は、どんな感情を呼び起こしますか？",
+        "その思い出が浮かぶ理由は何だと思いますか？",
+        "他にどんな思い出が浮かびますか？"
+      ]
+    };
+
+    if ('webkitSpeechRecognition' in window) {
+      recognition = new webkitSpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'ja-JP';
+
+      recognition.onresult = function(event) {
+        const last = event.results.length - 1;
+        const text = event.results[last][0].transcript;
+        
+        if (event.results[last].isFinal) {
+          addMessage(text, 'user-message');
+          respondToMessage(text);
+        }
+      };
+    }
+
+    function respondToMessage(text) {
+      let response;
+      if (lastResponse) {
+        const followUps = followUpQuestions[currentQuestionIndex];
+        const availableFollowUps = followUps.filter(q => !askedQuestions.has(q));
+        if (availableFollowUps.length > 0) {
+          response = availableFollowUps[Math.floor(Math.random() * availableFollowUps.length)];
+        } else {
+          currentQuestionIndex = (currentQuestionIndex + 1) % initialQuestions.length;
+          response = initialQuestions[currentQuestionIndex];
+        }
+      } else {
+        const availableQuestions = initialQuestions.filter(q => !askedQuestions.has(q));
+        if (availableQuestions.length > 0) {
+          response = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
+          currentQuestionIndex = initialQuestions.indexOf(response);
+        } else {
+          askedQuestions.clear();
+          response = initialQuestions[currentQuestionIndex];
+        }
+      }
+      
+      askedQuestions.add(response);
+      lastResponse = response;
+      addMessage(response, 'art-message');
+      speak(response);
+    }
+
+    function generateNewArt() {
+      askedQuestions.clear();
+      currentQuestionIndex = Math.floor(Math.random() * initialQuestions.length);
+      lastResponse = '';
+      
+      const artDisplay = document.getElementById('artDisplay');
+      const colors = ['#ff9ac1', '#ffb6c1', '#ff80ab', '#ffa7d1', '#ff69b4'];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      
+      artDisplay.innerHTML = `
+        <svg width="400" height="300" viewBox="0 0 400 300">
+          <rect width="100%" height="100%" fill="#fff5f7"/>
+          <circle cx="${Math.random() * 300 + 50}" cy="${Math.random() * 200 + 50}" 
+                  r="${Math.random() * 40 + 20}" fill="${randomColor}" opacity="0.8">
+            <animate attributeName="r" values="${Math.random() * 40 + 20};${Math.random() * 45 + 20};${Math.random() * 40 + 20}" 
+                     dur="2s" repeatCount="indefinite"/>
+          </circle>
+          <path d="M${Math.random() * 200},${Math.random() * 150} Q${Math.random() * 300},${Math.random() * 200} ${Math.random() * 400},${Math.random() * 300}"
+                stroke="${colors[Math.floor(Math.random() * colors.length)]}" 
+                fill="none" 
+                stroke-width="3">
+            <animate attributeName="d" 
+                     dur="3s"
+                     repeatCount="indefinite"
+                     values="M${Math.random() * 200},${Math.random() * 150} Q${Math.random() * 300},${Math.random() * 200} ${Math.random() * 400},${Math.random() * 300};
+                             M${Math.random() * 200},${Math.random() * 150} Q${Math.random() * 300},${Math.random() * 200} ${Math.random() * 400},${Math.random() * 300}"/>
+          </path>
+        </svg>
+      `;
+      
+      document.getElementById('chatArea').innerHTML = '';
+      respondToMessage('');
+    }
+
+    function sendMessage() {
+      const messageInput = document.getElementById('messageText');
+      const text = messageInput.value.trim();
+      
+      if (text) {
+        addMessage(text, 'user-message');
+        messageInput.value = '';
+        respondToMessage(text);
+      }
+    }
+
+    function addMessage(text, className) {
+      const chatArea = document.getElementById('chatArea');
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${className}`;
+      messageDiv.textContent = text;
+      chatArea.appendChild(messageDiv);
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function speak(text) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ja-JP';
+      synthesis.speak(utterance);
+    }
+
+    function toggleSpeech() {
+      if (!recognition) {
+        alert('お使いのブラウザは音声認識に対応していません。');
+        return;
+      }
+
+      if (isListening) {
+        recognition.stop();
+        isListening = false;
+      } else {
+        recognition.start();
+        isListening = true;
+      }
+    }
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const artDisplay = document.getElementById('artDisplay');
+          artDisplay.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; max-height: 400px; border-radius: 15px;">`;
+          currentQuestionIndex = (currentQuestionIndex + 1) % initialQuestions.length;
+          lastResponse = '';
+          document.getElementById('chatArea').innerHTML = '';
+          respondToMessage('');
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    document.getElementById('messageText').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+
+    const ws = new WebSocket('wss://example.com/ws');
+    ws.onmessage = function(event) {
+      const data = JSON.parse(event.data);
+      if (data.type === 'participantCount') {
+        document.getElementById('participantCount').textContent = data.count;
+      } else if (data.type === 'message') {
+        addMessage(data.text, data.className);
+      }
+    };
+  </script>
+</body></html>
